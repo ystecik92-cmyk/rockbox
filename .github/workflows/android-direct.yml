@@ -26,11 +26,11 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Set up Java 8
+      - name: Set up Java 17 for Android SDK tools
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '8'
+          java-version: '17'
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
@@ -47,6 +47,12 @@ jobs:
             https://dl.google.com/android/repository/android-ndk-r16b-linux-x86_64.zip
           unzip -q "$RUNNER_TEMP/android-ndk-r16b.zip" -d "$RUNNER_TEMP"
           echo "ANDROID_NDK_PATH=$RUNNER_TEMP/android-ndk-r16b" >> "$GITHUB_ENV"
+
+      - name: Set up Java 8 for the legacy builder
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
 
       - name: Install native build dependencies
         run: |
