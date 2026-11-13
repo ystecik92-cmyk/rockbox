@@ -137,8 +137,21 @@ Java_org_rockbox_RockboxFramebuffer_surfaceCreated(JNIEnv *env, jobject this,
     wait_rockbox_ready();
 
     send_event(LCD_EVENT_ACTIVATION, NULL);
-    /* Force an update, since the newly created surface is initially black
-     * waiting for the next normal update results in a longish black screen */
+}
+
+/* surfaceChanged() creates the Java bitmap after surfaceCreated() returns.
+ * Request the initial redraw only once that destination exists, otherwise the
+ * first frame can be discarded while the Surface is still black. */
+JNIEXPORT void JNICALL
+Java_org_rockbox_RockboxFramebuffer_framebufferReady(JNIEnv *env, jobject this)
+{
+    (void)env;
+    (void)this;
+
+    if (!display_on)
+        return;
+
+    wait_rockbox_ready();
     button_queue_post(BUTTON_REDRAW, 0);
 }
 

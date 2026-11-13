@@ -162,6 +162,8 @@ public class RockboxFramebuffer extends SurfaceView
         return view_config.getScaledTouchSlop();
     }
 
+    private native void framebufferReady();
+
     private native void touchHandler(boolean down, int x, int y);
     public native static boolean buttonHandler(int keycode, boolean state);
 
@@ -173,5 +175,6 @@ public class RockboxFramebuffer extends SurfaceView
         updateContentRect(width, height);
         btm = Bitmap.createBitmap(LCD_WIDTH, LCD_HEIGHT, Bitmap.Config.RGB_565);
         setEnabled(true);
+        framebufferReady();
     }
 }
