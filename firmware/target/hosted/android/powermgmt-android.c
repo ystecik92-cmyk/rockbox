@@ -30,27 +30,63 @@ extern jobject RockboxService_instance;
 static jfieldID __battery_level;
 static jobject BatteryMonitor_instance;
 
-static void new_battery_monitor(void)
+static bool clear_jni_exception(JNIEnv *env)
 {
-    JNIEnv e = *env_ptr;
-    jclass class = e->FindClass(env_ptr, "org/rockbox/monitors/BatteryMonitor");
-    jmethodID constructor = e->GetMethodID(env_ptr, class,
-                                            "<init>",
-                                            "(Landroid/content/Context;)V");
-    BatteryMonitor_instance = e->NewObject(env_ptr, class,
-                                            constructor,
-                                            RockboxService_instance);
+    if (!(*env)->ExceptionCheck(env))
+        return false;
 
-    /* cache the battery level field id */
-    __battery_level = (*env_ptr)->GetFieldID(env_ptr,
-                                            class,
-                                            "mBattLevel", "I");
+    (*env)->ExceptionDescribe(env);
+    (*env)->ExceptionClear(env);
+    return true;
+}
+
+/* Called directly from the Java JNI entry point, before Rockbox starts its
+ * cooperative threads. Constructing this Android object later from a
+ * Rockbox thread can exhaust the VM's Java stack while entering the
+ * BroadcastReceiver constructor on Android. */
+void android_battery_init(void)
+{
+    JNIEnv *env = env_ptr;
+    if (!env || !RockboxService_instance)
+        return;
+
+    jclass cls = (*env)->FindClass(env, "org/rockbox/monitors/BatteryMonitor");
+    if (clear_jni_exception(env) || !cls)
+        return;
+
+    jmethodID constructor = (*env)->GetMethodID(env, cls, "<init>",
+                                                "(Landroid/content/Context;)V");
+    if (clear_jni_exception(env) || !constructor)
+    {
+        (*env)->DeleteLocalRef(env, cls);
+        return;
+    }
+
+    jobject instance = (*env)->NewObject(env, cls, constructor,
+                                          RockboxService_instance);
+    if (clear_jni_exception(env) || !instance)
+    {
+        (*env)->DeleteLocalRef(env, cls);
+        return;
+    }
+
+    jfieldID level = (*env)->GetFieldID(env, cls, "mBattLevel", "I");
+    if (clear_jni_exception(env) || !level)
+    {
+        (*env)->DeleteLocalRef(env, instance);
+        (*env)->DeleteLocalRef(env, cls);
+        return;
+    }
+
+    BatteryMonitor_instance = instance;
+    __battery_level = level;
+    (*env)->DeleteLocalRef(env, cls);
 }
 
 int _battery_level(void)
 {
-    if (!BatteryMonitor_instance)
-        new_battery_monitor();
+    if (!BatteryMonitor_instance || !__battery_level)
+        return -1;
+
     return (*env_ptr)->GetIntField(env_ptr, BatteryMonitor_instance, __battery_level);
 }
-

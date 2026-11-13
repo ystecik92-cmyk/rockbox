@@ -41,6 +41,7 @@ uintptr_t *stackend;
 
 extern int main(void);
 extern void telephony_init_device(void);
+extern void android_battery_init(void);
 
 void system_exception_wait(void)
 {
@@ -113,6 +114,7 @@ Java_org_rockbox_RockboxService_main(JNIEnv *env, jobject this)
         RockboxService_instance = this;
         RockboxService_class = (*env)->GetObjectClass(env, this);
 
+        android_battery_init();
         main();
     }
     /* simply return here. this will allow the VM to clean up objects and do
