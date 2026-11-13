@@ -1,0 +1,101 @@
+name: Build Rockbox Android direct UI (arm64)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'android/**'
+      - 'ci/**'
+      - '.github/workflows/android-direct.yml'
+      - 'tools/**'
+      - 'apps/**'
+      - 'firmware/**'
+      - 'fonts/**'
+      - 'wps/**'
+      - 'icons/**'
+      - 'backdrops/**'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK platforms and compatible build tools
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-21" "platforms;android-28" "build-tools;28.0.3" "platform-tools"
+          echo "ANDROID_SDK_PATH=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Install NDK r16b for the legacy direct Android port (AArch64 GCC)
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/android-ndk-r16b.zip" \
+            https://dl.google.com/android/repository/android-ndk-r16b-linux-x86_64.zip
+          unzip -q "$RUNNER_TEMP/android-ndk-r16b.zip" -d "$RUNNER_TEMP"
+          echo "ANDROID_NDK_PATH=$RUNNER_TEMP/android-ndk-r16b" >> "$GITHUB_ENV"
+
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential bison flex gettext libncurses-dev zip unzip perl python3
+
+      - name: Configure and compile direct Android Rockbox for ARM64
+        run: |
+          mkdir build-android-direct
+          cd build-android-direct
+          ../tools/configure --target=android --lcdwidth=1080 --lcdheight=1920
+          make -j2
+          make zip
+
+      - name: Add Z1Music_Green theme to Rockbox resources
+        run: python3 ci/merge-z1-theme.py build-android-direct/rockbox.zip ci/theme/Z1Music_Green.zip
+
+      - name: Package APK
+        run: make -C build-android-direct apk
+
+      - name: Verify ARM64 APK and 16 KB-compatible native libraries
+        run: |
+          test -s build-android-direct/rockbox.apk
+          unzip -Z1 build-android-direct/rockbox.apk | grep -q '^lib/arm64-v8a/librockbox.so$'
+          unzip -Z1 build-android-direct/rockbox.apk | grep -q '^lib/arm64-v8a/libmisc.so$'
+          if unzip -Z1 build-android-direct/rockbox.apk | grep -Eq '^lib/(armeabi|armeabi-v7a)/'; then
+            echo 'Unexpected 32-bit ARM library in the APK' >&2
+            exit 1
+          fi
+          aapt_path="$ANDROID_SDK_PATH/build-tools/28.0.3/aapt"
+          "$aapt_path" dump badging build-android-direct/rockbox.apk | grep -q "native-code: 'arm64-v8a'"
+          python3 - <<'PY'
+          import pathlib, re, subprocess, sys
+          libs = pathlib.Path('build-android-direct/libs/arm64-v8a')
+          native = [p for p in libs.glob('*.so') if p.name != 'libmisc.so']
+          if not native:
+              sys.exit('No ELF native libraries were produced')
+          for lib in native:
+              headers = subprocess.check_output(['readelf', '-lW', str(lib)], text=True)
+              aligns = [int(m.group(1), 16) for m in re.finditer(r'^\s*LOAD\b.*\s(0x[0-9a-fA-F]+)\s*$', headers, re.M)]
+              if not aligns or min(aligns) < 16384:
+                  sys.exit(f'{lib}: PT_LOAD alignment is not 16 KB compatible: {aligns}')
+          print(f'Validated {len(native)} ARM64 ELF libraries with 16 KB PT_LOAD alignment')
+          PY
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: rockbox-android-direct-arm64v8a-1080x1920-canvas
+          path: build-android-direct/rockbox.apk
+          if-no-files-found: error
+          retention-days: 14

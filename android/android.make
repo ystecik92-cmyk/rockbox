@@ -28,7 +28,9 @@ $(CPUFEAT_BUILD)/cpu-features.o: $(CPUFEAT)/cpu-features.c
 
 # API version
 #ANDROID_PLATFORM_VERSION=19 # Set by configure script
-ANDROID_PLATFORM=$(ANDROID_SDK_PATH)/platforms/android-$(ANDROID_PLATFORM_VERSION)
+# The Java/manifest SDK can be newer than the native API used by the legacy port.
+ANDROID_COMPILE_PLATFORM_VERSION ?= 28
+ANDROID_PLATFORM=$(ANDROID_SDK_PATH)/platforms/android-$(ANDROID_COMPILE_PLATFORM_VERSION)
 
 # Use oldest version available..
 BUILD_TOOLS_VERSION=$(notdir $(firstword $(wildcard $(ANDROID_SDK_PATH)/build-tools/*)))

@@ -778,13 +778,14 @@ androidcc () {
             ;;
         aarch64)
             endian="little"
-            gcctarget="arm-linux-androideabi-"
+            gcctarget="aarch64-linux-android-"
             echo "${make_toolchain} --toolchain=aarch64-linux-android-${gccchoice} --platform=android-$ANDROID_PLATFORM_VERSION --install-dir=${pwd}/android-toolchain"
             ${make_toolchain} --toolchain=aarch64-linux-android-${gccchoice} --platform=android-$ANDROID_PLATFORM_VERSION --install-dir=${pwd}/android-toolchain
             if [ ${?} != 0 ]; then
                 exit
             fi
-            GCCOPTS="$GCCOPTS -fomit-frame-pointer -fuse-ld=bfd"  # what default cpu arch/tune to use?
+            GCCOPTS="$GCCOPTS -fomit-frame-pointer -fuse-ld=bfd"
+            LDOPTS="$LDOPTS -Wl,-z,max-page-size=16384 -Wl,-z,common-page-size=16384"
             ;;
         *)
             echo "ERROR: androidcc(): Unknown target architecture"
@@ -794,6 +795,10 @@ androidcc () {
 
     LDOPTS="$LDOPTS -fuse-ld=bfd --sysroot=${pwd}/android-toolchain/sysroot"
     GCCOPTS="$GCCOPTS --sysroot=${pwd}/android-toolchain/sysroot"
+    # Android expects its ABI directory name, not the compiler architecture.
+    if [ "$ANDROID_ARCH" = "aarch64" ]; then
+        ANDROID_ARCH="arm64-v8a"
+    fi
     echo "Using endian ${endian}"
     echo "Using gccchoice ${gccchoice}"
     echo "Using gcctarget ${gcctarget}"
@@ -3346,9 +3351,10 @@ esac
     sharedir="/data/data/org.rockbox/app_rockbox/rockbox"
     bindir="/data/data/org.rockbox/lib"
     libdir="/data/data/org.rockbox/app_rockbox"
-    memory=8
+    memory=128
     uname=`uname`
-    androidcc 19 armeabi "-march=armv7-a -mtune=cortex-a9 -mfloat-abi=softfp"
+    # arm64 is required by current Android devices; arm64-v8a requires API 21+.
+    androidcc 21 aarch64 ""
     tool="cp "
     boottool="cp "
     bmp2rb_mono="$rootdir/tools/bmp2rb -f 0"
