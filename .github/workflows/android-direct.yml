@@ -76,9 +76,9 @@ jobs:
 
       - name: Package APK
         run: |
-          # The initial build may have copied the pre-theme ZIP to this target.
+          # Copy the merged ZIP into libmisc, without rerunning the zip target.
           rm -f build-android-direct/libs/arm64-v8a/libmisc.so
-          make -C build-android-direct apk
+          make -C build-android-direct apk NODEPS=1
 
       - name: Verify ARM64 APK and 16 KB-compatible native libraries
         run: |
