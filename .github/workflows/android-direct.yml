@@ -75,7 +75,10 @@ jobs:
         run: python3 ci/merge-z1-theme.py build-android-direct/rockbox.zip ci/theme/Z1Music_Green.zip
 
       - name: Package APK
-        run: make -C build-android-direct apk
+        run: |
+          # The initial build may have copied the pre-theme ZIP to this target.
+          rm -f build-android-direct/libs/arm64-v8a/libmisc.so
+          make -C build-android-direct apk
 
       - name: Verify ARM64 APK and 16 KB-compatible native libraries
         run: |
@@ -100,6 +103,24 @@ jobs:
               if not aligns or min(aligns) < 16384:
                   sys.exit(f'{lib}: PT_LOAD alignment is not 16 KB compatible: {aligns}')
           print(f'Validated {len(native)} ARM64 ELF libraries with 16 KB PT_LOAD alignment')
+          PY
+          python3 - <<'PY'
+          import io, zipfile
+          apk = 'build-android-direct/rockbox.apk'
+          with zipfile.ZipFile(apk) as outer:
+              payload = outer.read('lib/arm64-v8a/libmisc.so')
+          with zipfile.ZipFile(io.BytesIO(payload)) as rb:
+              names = set(rb.namelist())
+          required = (
+              '.rockbox/themes/Z1Music_Green.cfg',
+              '.rockbox/wps/Z1Music_Green.wps',
+              '.rockbox/wps/Z1Music_Green.sbs',
+              '.rockbox/backdrops/Z1bg_green.bmp',
+          )
+          missing = [name for name in required if name not in names]
+          if missing:
+              raise SystemExit('APK is missing Z1Music_Green resources: ' + ', '.join(missing))
+          print('Verified Z1Music_Green theme resources inside APK libmisc.so')
           PY
 
       - name: Upload APK
